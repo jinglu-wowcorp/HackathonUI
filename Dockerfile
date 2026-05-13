@@ -2,8 +2,6 @@
 FROM node:20-alpine AS build
 WORKDIR /app
 COPY package*.json ./
-RUN apk add --no-cache python3 make g++ \
-  && npm config set unsafe-perm true
 RUN npm install
 COPY . .
 RUN npm run build
