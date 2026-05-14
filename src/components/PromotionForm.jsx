@@ -1,31 +1,62 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "./PromotionForm.css";
 
-// Static article list with IDs and categories
-const articles = [
-  { id: "ART-001", name: "Running Shoes", category: "Footwear" },
-  { id: "ART-002", name: "Cotton T-Shirt", category: "Apparel" },
-  { id: "ART-003", name: "Yoga Mat", category: "Equipment" },
-  { id: "ART-004", name: "Water Bottle", category: "Accessories" },
-  { id: "ART-005", name: "Protein Powder", category: "Nutrition" }
-];
+const API_BASE_URL = "https://promogen-73298798964.us-central1.run.app";
 
 const PromotionForm = () => {
   const navigate = useNavigate();
+  const [categories, setCategories] = useState([]);
+  const [articles, setArticles] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   
   const [form, setForm] = useState({
     description: "",
-    promotionType: "standard",
+    promotionType: "Sweet Save",
     discountType: "percentage",
     discount: "",
     startDate: "",
     endDate: "",
-    articleId: "" // Stores the selected article's ID
+    articleId: ""
   });
+
+  // Fetch categories on mount
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/categories`);
+        const result = await response.json();
+        if (result.status === "success" || result.data) {
+          setCategories(result.data || []);
+        }
+      } catch (err) {
+        console.error("Failed to fetch categories:", err);
+      }
+    };
+    fetchCategories();
+  }, []);
+
+  // Fetch articles when category changes or on mount
+  useEffect(() => {
+    const fetchArticles = async () => {
+      try {
+        const url = selectedCategory && selectedCategory !== ""
+          ? `${API_BASE_URL}/articles/category/${selectedCategory}`
+          : `${API_BASE_URL}/articles`;
+        
+        const response = await fetch(url);
+        const result = await response.json();
+        if (result.status === "success" || result.data) {
+          setArticles(result.data || []);
+        }
+      } catch (err) {
+        console.error("Failed to fetch articles:", err);
+      }
+    };
+    fetchArticles();
+  }, [selectedCategory]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -35,7 +66,7 @@ const PromotionForm = () => {
   const handleCategoryChange = (e) => {
     const newCategory = e.target.value;
     setSelectedCategory(newCategory);
-    setForm(prev => ({ ...prev, articleId: "" })); // Reset selection on filter change
+    setForm(prev => ({ ...prev, articleId: "" })); 
   };
 
   const handleSubmit = async (e) => {
@@ -43,19 +74,28 @@ const PromotionForm = () => {
     setError("");
     setIsSubmitting(true);
 
-    // Prepare API Data Payload
+    // Generate a unique promotion ID using timestamp + random suffix
+    const now = new Date();
+    const timestamp = now.toISOString().replace(/[-:T]/g, "").split(".")[0]; // YYYYMMDDHHMMSS
+    const randomSuffix = Math.floor(100 + Math.random() * 900);
+    const uniquePromoId = `PROMO-${timestamp}-${randomSuffix}`;
+
+    // Prepare API Data Payload matching your curl example exactly
     const apiPayload = {
-      description: form.description,
-      promotion_type: form.promotionType,
+      promotion_id: uniquePromoId, 
       start_date: form.startDate,
       end_date: form.endDate,
-      percentage: form.discountType === "percentage" ? Number(form.discount) : 0,
+      promotion_type: form.promotionType,
+      description: form.description || "No description",
       price: form.discountType === "fixed" ? Number(form.discount) : 0,
-      article_id: form.articleId // Passing the selected Article ID
+      percentage: form.discountType === "percentage" ? Number(form.discount) : 0
     };
 
+    console.log("Submitting Payload:", apiPayload);
+
     try {
-      const response = await fetch("https://promogen-73298798964.us-central1.run.app/process-promotion/1", {
+      // Use the articleId in the URL path as requested
+      const response = await fetch(`${API_BASE_URL}/process-promotion/${form.articleId}`, {
         method: "POST",
         headers: {
           "accept": "application/json",
@@ -64,124 +104,139 @@ const PromotionForm = () => {
         body: JSON.stringify(apiPayload)
       });
 
+      const result = await response.json().catch(() => ({}));
+
       if (response.ok) {
-        // Success: Go to review page
-        navigate("/review");
+        console.log("Success:", result);
+        navigate("/review", { state: { apiResult: result } });
       } else {
-        // API returned an error (e.g., 400, 500)
-        const errorData = await response.json().catch(() => ({}));
-        // Show the exact JSON error returned by the API for debugging
-        setError(`API Error (${response.status}): ${JSON.stringify(errorData)}`);
+        // Show detailed error if the API fails
+        setError(`API Error (${response.status}): ${JSON.stringify(result)}`);
       }
     } catch (err) {
-      // Network error
-      setError(`Network error: ${err.message}`);
+      setError(`Network error: ${err.message}. Please check your connection.`);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const uniqueCategories = [...new Set(articles.map(a => a.category))];
-  const filteredArticles = (selectedCategory === "" || selectedCategory === "None")
-    ? articles
-    : articles.filter(a => a.category === selectedCategory);
-
   return (
-    <form className="promotion-form" onSubmit={handleSubmit}>
-      <h2>Create Promotion</h2>
-      
-      {error && (
-        <div style={{ 
-          color: "#721c24", 
-          backgroundColor: "#f8d7da", 
-          border: "1px solid #f5c6cb", 
-          padding: "0.75rem 1.25rem", 
-          marginBottom: "1rem", 
-          borderRadius: "4px",
-          wordBreak: "break-all",
-          fontSize: "0.9rem"
-        }}>
-          <strong>Error:</strong> {error}
-        </div>
-      )}
+    <div className="form-wrapper">
+      <form className={`promotion-form ${isSubmitting ? "form-loading" : ""}`} onSubmit={handleSubmit}>
+        <h2>Create Promotion</h2>
+        
+        {error && (
+          <div className="error-banner">
+            <strong>Submission Failed</strong>
+            <p>{error}</p>
+          </div>
+        )}
 
-      <label>
-        Description
-        <textarea name="description" value={form.description} onChange={handleChange} required />
-      </label>
+        <fieldset disabled={isSubmitting} style={{ border: "none", padding: 0, margin: 0 }}>
+          <label>
+            Description
+            <textarea 
+              name="description" 
+              placeholder="e.g. Buy 2 get 1 free on selected snacks"
+              value={form.description} 
+              onChange={handleChange} 
+              required 
+            />
+          </label>
 
-      <label>
-        Promotion Type
-        <select name="promotionType" value={form.promotionType} onChange={handleChange}>
-          <option value="standard">Standard</option>
-          <option value="Multi buy">Multi buy</option>
-          <option value="seasonal">Seasonal</option>
-          <option value="clearance">Clearance</option>
-        </select>
-      </label>
+          <label>
+            Promotion Type
+            <select name="promotionType" value={form.promotionType} onChange={handleChange}>
+              <option value="Sweet Save">Sweet Save</option>
+              <option value="Member Price">Member Price</option>
+              <option value="Multi buy">Multi buy</option>
+            </select>
+          </label>
 
-      <label>
-        Discount Type
-        <select name="discountType" value={form.discountType} onChange={handleChange}>
-          <option value="percentage">Percentage (%)</option>
-          <option value="fixed">Fixed Amount ($)</option>
-        </select>
-      </label>
+          <div className="form-row">
+            <label>
+              Discount Type
+              <select name="discountType" value={form.discountType} onChange={handleChange}>
+                <option value="percentage">Percentage (%)</option>
+                <option value="fixed">Fixed Amount ($)</option>
+              </select>
+            </label>
 
-      <label>
-        Discount Value
-        <input
-          name="discount"
-          type="number"
-          min="0"
-          step="any"
-          value={form.discount}
-          onChange={handleChange}
-          required
-        />
-      </label>
+            <label>
+              Discount Value
+              <input 
+                name="discount" 
+                type="number" 
+                min="0" 
+                step="any" 
+                placeholder="e.g. 11"
+                value={form.discount} 
+                onChange={handleChange} 
+                required 
+              />
+            </label>
+          </div>
 
-      <label>
-        Start Date
-        <input name="startDate" type="date" value={form.startDate} onChange={handleChange} required />
-      </label>
+          <div className="form-row">
+            <label>
+              Start Date
+              <input name="startDate" type="date" value={form.startDate} onChange={handleChange} required />
+            </label>
 
-      <label>
-        End Date
-        <input name="endDate" type="date" value={form.endDate} onChange={handleChange} required />
-      </label>
-      
-      <label>
-        Filter by Category
-        <select value={selectedCategory} onChange={handleCategoryChange}>
-          <option value="">None / All</option>
-          {uniqueCategories.map((category, idx) => (
-            <option key={idx} value={category}>{category}</option>
-          ))}
-        </select>
-      </label>
+            <label>
+              End Date
+              <input name="endDate" type="date" value={form.endDate} onChange={handleChange} required />
+            </label>
+          </div>
+          
+          <label>
+            Filter by Category
+            <select value={selectedCategory} onChange={handleCategoryChange}>
+              <option value="">-- All Categories --</option>
+              {categories.map((cat, idx) => {
+                const catId = cat.CategoryID || cat.categoryId || cat._id || `cat-${idx}`;
+                const catName = cat.Category || cat.CategoryName || "Unknown Category";
+                return (
+                  <option key={catId} value={catId}>
+                    {catName}
+                  </option>
+                );
+              })}
+            </select>
+          </label>
 
-      <label>
-        Article
-        <select
-          name="articleId"
-          value={form.articleId}
-          onChange={handleChange}
-          required
-        >
-          <option value="" disabled>-- Select an Article --</option>
-          {filteredArticles.map((article) => (
-            <option key={article.id} value={article.id}>
-              {article.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      
-      <button type="submit" disabled={isSubmitting}>
-        {isSubmitting ? "Processing..." : "Add Promotion"}
-      </button>
-    </form>
+          <label>
+            Article
+            <select name="articleId" value={form.articleId} onChange={handleChange} required>
+              <option value="" disabled>-- Select an Article --</option>
+              {articles.map((article, idx) => {
+                const artId = article.Article_Id || article.article_id || article._id || `art-${idx}`;
+                const artName = article.Article_Name || article.article_name || "Unknown Article";
+                return (
+                  <option key={artId} value={artId}>
+                    {artName}
+                  </option>
+                );
+              })}
+            </select>
+          </label>
+          
+          <button 
+            type="submit" 
+            className={`submit-btn ${isSubmitting ? "btn-processing" : ""}`}
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? (
+              <span className="loading-content">
+                <span className="spinner"></span> Processing...
+              </span>
+            ) : (
+              "Add Promotion"
+            )}
+          </button>
+        </fieldset>
+      </form>
+    </div>
   );
 };
 
