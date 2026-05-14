@@ -22,7 +22,6 @@ const PromotionForm = () => {
     articleId: ""
   });
 
-  // Fetch categories on mount
   useEffect(() => {
     const fetchCategories = async () => {
       try {
@@ -38,7 +37,6 @@ const PromotionForm = () => {
     fetchCategories();
   }, []);
 
-  // Fetch articles when category changes or on mount
   useEffect(() => {
     const fetchArticles = async () => {
       try {
@@ -74,13 +72,11 @@ const PromotionForm = () => {
     setError("");
     setIsSubmitting(true);
 
-    // Generate a unique promotion ID using timestamp + random suffix
     const now = new Date();
-    const timestamp = now.toISOString().replace(/[-:T]/g, "").split(".")[0]; // YYYYMMDDHHMMSS
+    const timestamp = now.toISOString().replace(/[-:T]/g, "").split(".")[0];
     const randomSuffix = Math.floor(100 + Math.random() * 900);
     const uniquePromoId = `PROMO-${timestamp}-${randomSuffix}`;
 
-    // Prepare API Data Payload matching your curl example exactly
     const apiPayload = {
       promotion_id: uniquePromoId, 
       start_date: form.startDate,
@@ -91,10 +87,7 @@ const PromotionForm = () => {
       percentage: form.discountType === "percentage" ? Number(form.discount) : 0
     };
 
-    console.log("Submitting Payload:", apiPayload);
-
     try {
-      // Use the articleId in the URL path as requested
       const response = await fetch(`${API_BASE_URL}/process-promotion/${form.articleId}`, {
         method: "POST",
         headers: {
@@ -107,10 +100,8 @@ const PromotionForm = () => {
       const result = await response.json().catch(() => ({}));
 
       if (response.ok) {
-        console.log("Success:", result);
-        navigate("/review", { state: { apiResult: result } });
+        navigate("/review", { state: { apiResult: result, promotionData: apiPayload, articleId: form.articleId } });
       } else {
-        // Show detailed error if the API fails
         setError(`API Error (${response.status}): ${JSON.stringify(result)}`);
       }
     } catch (err) {

@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
+const API_BASE_URL = "https://promogen-73298798964.us-central1.run.app";
+
 const feedbackOptions = [
   { label: "Price Match", value: "price" },
   { label: "Date Validated", value: "date" },
@@ -13,11 +15,13 @@ const ImageReview = () => {
   const navigate = useNavigate();
   const [feedback, setFeedback] = useState([]);
   const [otherText, setOtherText] = useState("");
+  const [apiResult, setApiResult] = useState(state?.apiResult || {});
+  const [loading, setLoading] = useState(false);
 
-  // Extract API data passed from the form
-  const apiResult = state?.apiResult || {};
-  
-  // Try to find the base64 string in various common payload structures
+  const promotionData = state?.promotionData;
+  const articleId = state?.articleId;
+
+  // Extract base64 string as before
   let base64String = null;
   if (apiResult) {
     if (apiResult.generated_assets?.image_base64) {
@@ -28,8 +32,6 @@ const ImageReview = () => {
       base64String = apiResult.data.image_base64;
     }
   }
-
-  // Ensure the string has the data URI prefix so the browser can render it
   const imgSrc = base64String 
     ? (base64String.startsWith('data:image') ? base64String : `data:image/jpeg;base64,${base64String}`)
     : null;
@@ -42,10 +44,40 @@ const ImageReview = () => {
     );
   };
 
+  // Regenerate logic
+  const handleRegenerate = async () => {
+    if (!promotionData || !articleId) return;
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/process-promotion/${articleId}`, {
+        method: "POST",
+        headers: {
+          "accept": "application/json",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(promotionData)
+      });
+      const result = await response.json().catch(() => ({}));
+      if (response.ok) {
+        setApiResult(result);
+        setFeedback([]);
+        setOtherText("");
+      } else {
+        alert("API Error: " + JSON.stringify(result));
+      }
+    } catch (err) {
+      alert("Network error: " + err.message);
+    }
+    setLoading(false);
+  };
+
+  const handleSave = () => {
+    navigate("/");
+  };
+
   return (
     <div style={{ maxWidth: 700, margin: "2rem auto", padding: "2rem", background: "#f8f9fa", borderRadius: 12 }}>
       <h2>Review AI Generated Image</h2>
-      
       <div style={{ display: "flex", flexDirection: "column", gap: "2rem", alignItems: "center" }}>
         {imgSrc ? (
           <div style={{ textAlign: "center", width: "100%" }}>
@@ -97,11 +129,18 @@ const ImageReview = () => {
           </div>
 
           <div style={{ marginTop: "2rem", display: "flex", gap: "1rem", justifyContent: "center" }}>
-            <button style={{ padding: "0.75rem 2rem", background: "#3182ce", color: "#fff", border: "none", borderRadius: 6, fontSize: "1rem", fontWeight: "600", cursor: "pointer", transition: "background 0.2s" }}>
+            <button
+              onClick={handleSave}
+              style={{ padding: "0.75rem 2rem", background: "#3182ce", color: "#fff", border: "none", borderRadius: 6, fontSize: "1rem", fontWeight: "600", cursor: "pointer", transition: "background 0.2s" }}
+            >
               Save Promotion
             </button>
-            <button style={{ padding: "0.75rem 2rem", background: "#ed8936", color: "#fff", border: "none", borderRadius: 6, fontSize: "1rem", fontWeight: "600", cursor: "pointer", transition: "background 0.2s" }}>
-              Regenerate
+            <button
+              onClick={handleRegenerate}
+              disabled={loading}
+              style={{ padding: "0.75rem 2rem", background: "#ed8936", color: "#fff", border: "none", borderRadius: 6, fontSize: "1rem", fontWeight: "600", cursor: loading ? "not-allowed" : "pointer", transition: "background 0.2s" }}
+            >
+              {loading ? "Regenerating..." : "Regenerate"}
             </button>
           </div>
         </>
