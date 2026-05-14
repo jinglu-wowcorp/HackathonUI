@@ -1,30 +1,33 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import "./PromotionForm.css";
 
-// Static product list (replace with MongoDB data later)
-const products = [
-  { id: 1, name: "Apple" },
-  { id: 2, name: "Banana" },
-  { id: 3, name: "Milk" },
-  { id: 4, name: "Bread" },
-  { id: 5, name: "Eggs" }
+// Static article list with categories (replace with MongoDB data later)
+const articles = [
+  { id: 1, name: "Running Shoes", category: "Footwear" },
+  { id: 2, name: "Cotton T-Shirt", category: "Apparel" },
+  { id: 3, name: "Yoga Mat", category: "Equipment" },
+  { id: 4, name: "Water Bottle", category: "Accessories" },
+  { id: 5, name: "Protein Powder", category: "Nutrition" }
 ];
 
 const PromotionForm = ({ onAddPromotion }) => {
+  const navigate = useNavigate();
+  const [selectedCategory, setSelectedCategory] = useState("");
   const [form, setForm] = useState({
-    title: "",
     description: "",
-    type: "percentage",
+    promotionType: "standard",
+    discountType: "percentage",
     discount: "",
     startDate: "",
     endDate: "",
-    products: [] // multiple products
+    article: "" // single article
   });
 
   const handleChange = (e) => {
     const { name, value, multiple, options } = e.target;
     if (multiple) {
-      // For multi-select
+      // For multi-select (if any future fields need it)
       const selected = Array.from(options)
         .filter(option => option.selected)
         .map(option => option.value);
@@ -37,39 +40,63 @@ const PromotionForm = ({ onAddPromotion }) => {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (
-      !form.title ||
       !form.discount ||
       !form.startDate ||
       !form.endDate ||
-      form.products.length === 0
+      !form.article
     )
       return;
-    onAddPromotion(form);
+    if (onAddPromotion) {
+      onAddPromotion(form);
+    }
     setForm({
-      title: "",
       description: "",
-      type: "percentage",
+      promotionType: "standard",
+      discountType: "percentage",
       discount: "",
       startDate: "",
       endDate: "",
-      products: []
+      article: ""
     });
+    setSelectedCategory("");
+    // Navigate to review page
+    navigate("/review");
+  };
+
+  // Get unique categories for the filter dropdown
+  const uniqueCategories = [...new Set(articles.map(a => a.category))];
+
+  // Filter articles based on the selected category dropdown
+  const filteredArticles = selectedCategory 
+    ? articles.filter(a => a.category === selectedCategory)
+    : articles;
+
+  // Handle category change, and reset article selection if the old article is filtered out
+  const handleCategoryChange = (e) => {
+    const newCategory = e.target.value;
+    setSelectedCategory(newCategory);
+    setForm(prev => ({ ...prev, article: "" })); // Clear article selection when category changes
   };
 
   return (
     <form className="promotion-form" onSubmit={handleSubmit}>
       <h2>Create Promotion</h2>
       <label>
-        Title
-        <input name="title" value={form.title} onChange={handleChange} required />
-      </label>
-      <label>
         Description
         <textarea name="description" value={form.description} onChange={handleChange} />
       </label>
       <label>
-        Type
-        <select name="type" value={form.type} onChange={handleChange}>
+        Promotion Type
+        <select name="promotionType" value={form.promotionType} onChange={handleChange}>
+          <option value="standard">Standard</option>
+          <option value="bogo">Buy One Get One</option>
+          <option value="seasonal">Seasonal</option>
+          <option value="clearance">Clearance</option>
+        </select>
+      </label>
+      <label>
+        Discount Type
+        <select name="discountType" value={form.discountType} onChange={handleChange}>
           <option value="percentage">Percentage (%)</option>
           <option value="fixed">Fixed Amount ($)</option>
         </select>
@@ -94,24 +121,34 @@ const PromotionForm = ({ onAddPromotion }) => {
         End Date
         <input name="endDate" type="date" value={form.endDate} onChange={handleChange} required />
       </label>
+      
       <label>
-        Products
+        Filter by Category
+        <select value={selectedCategory} onChange={handleCategoryChange}>
+          <option value="">All Categories</option>
+          {uniqueCategories.map((category, idx) => (
+            <option key={idx} value={category}>{category}</option>
+          ))}
+        </select>
+      </label>
+
+      <label>
+        Article
         <select
-          name="products"
-          multiple
-          value={form.products}
+          name="article"
+          value={form.article}
           onChange={handleChange}
           required
-          style={{ height: "100px" }}
         >
-          {products.map((product) => (
-            <option key={product.id} value={product.name}>
-              {product.name}
+          <option value="" disabled>-- Select an Article --</option>
+          {filteredArticles.map((article) => (
+            <option key={article.id} value={article.name}>
+              {article.name}
             </option>
           ))}
         </select>
-        <small>Hold Ctrl (Windows) or Cmd (Mac) to select multiple</small>
       </label>
+      
       <button type="submit">Add Promotion</button>
     </form>
   );
